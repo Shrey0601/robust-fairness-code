@@ -239,7 +239,7 @@ class SoftweightsHeuristicModel(model.Model):
         """Projects W onto linear equality constraints AW_flattened = b."""
         # Flatten W into a column vector such that the first 4m elements of the flattened vector correspond with the first column of W.
         W_flattened = tf.reshape(tf.transpose(W_input), [self.W_flattened_size,1])
-        # Project W_flattened onto linear constraints using A. 
+        # Project W_flattened onto   constraints using A. 
         AT = tf.transpose(A)
         AATinv = tf.linalg.inv(tf.linalg.matmul(A, AT))
         AW_minus_b = tf.matmul(A, W_flattened) - b
@@ -330,7 +330,7 @@ class SoftweightsHeuristicModel(model.Model):
         self.build_A_groups()
         self.build_A_simplex()
         
-        # Create W variable.
+        # Create W variable.  ##### Here the W variable is created [0,0,....0]
         self.num_projection_iters=num_projection_iters
         initial_W = np.zeros((self.W_num_rows, self.W_num_cols), dtype=np.float32)
         self.W_variable = tf.compat.v2.Variable(
@@ -341,19 +341,21 @@ class SoftweightsHeuristicModel(model.Model):
           constraint=self.project_W
         )
         
+        ##### theta variable is defined in model.py with name self.theta_variables
+        
         # Build constraints list for hinge loss equal accuracy constraint.
         self.build_r_tensor(constraint=constraint)
         constraints_list = []
         if constraint == 'err':
             constraints_list = self.get_equal_accuracy_constraints(constraints_slack=constraints_slack)
         elif constraint == 'tpr':
-            constraints_list = self.get_equal_tpr_constraints(constraints_slack=constraints_slack)
+            constraints_list = self.get_equal_tpr_constraints(constraints_slack=constraints_slack)   ##### ensures g(theta) <= 0
         elif constraint == 'tpr_and_fpr':
             constraints_list = self.get_equal_tpr_and_fpr_constraints(constraints_slack=constraints_slack)
         self.num_constraints = len(constraints_list)
         self.constraints = tf.convert_to_tensor(constraints_list)
         
-        # Create lagrange multiplier variables.
+        # Create lagrange multiplier variables.  ##### Here the lambda variables are created [0,0,....0]
         initial_lambdas = np.zeros((self.num_constraints,), dtype=np.float32)
         self.lambda_variables = tf.compat.v2.Variable(
           initial_lambdas,
@@ -362,10 +364,12 @@ class SoftweightsHeuristicModel(model.Model):
           dtype=tf.float32, 
           constraint=self.project_lambdas)
         
+        ##### Lagrangian loss is calculated here f(theta) + lambda * g(theta) [self.constraints = g(theta) tensor]
         lagrangian_loss = self.objective + tf.tensordot(
           tf.cast(self.lambda_variables, dtype=self.constraints.dtype.base_dtype),
           self.constraints, 1)
 
+        ##### Update the theta, lambda and W variables using the optimizer
         optimizer_theta = tf.train.AdamOptimizer(learning_rate_theta)
         optimizer_lambda = tf.train.AdamOptimizer(learning_rate_lambda)
         optimizer_W = tf.train.AdamOptimizer(learning_rate_W)
@@ -413,7 +417,7 @@ def training_generator(sw_model,
                     minibatch_indices += range(minibatch_start_index, minibatch_end_index)
                     minibatch_start_index = minibatch_end_index
             minibatch_df = train_df.iloc[[permutation[ii] for ii in minibatch_indices]]
-            # Ascent step on W (with projection included).
+            # Ascent step on W (with projection included).  ##### Here the W is getting updated for every time step
             for _ in range(num_iterations_W):
                 session.run(
                       sw_model.train_op_W,
@@ -827,7 +831,7 @@ def training_helper(sw_model,
             'test_01_robust_constraints_matrix': test_01_robust_constraints_matrix}
 
 
-def build_b(input_df, proxy_groups, true_groups, include_simplex_constraints=False):
+def build_b(input_df, proxy_groups, true_groups, include_simplex_constraints=False):   ##### simp;ex constrainits set to false
     # If a proxy group has zero examples, appends 0.
     num_groups = len(proxy_groups)
     b = []
@@ -847,7 +851,7 @@ def build_b(input_df, proxy_groups, true_groups, include_simplex_constraints=Fal
         W_num_rows = num_groups*4
         for i in range(W_num_rows):
             b.append(1)
-    return np.array(b)
+    return np.array(b)   ##### This array contains the set of probabilities of size num_groups * num_groups
 
 
 def get_true_group_marginals(input_df, true_groups):
@@ -855,7 +859,7 @@ def get_true_group_marginals(input_df, true_groups):
     for group in true_groups:
         marginal = input_df[group].mean()
         true_group_marginals.append(marginal)
-    return true_group_marginals
+    return true_group_marginals   ##### calculates the marginal probability (mean) for each true group
 
 
 def get_results_for_learning_rates(input_df, 
@@ -899,7 +903,7 @@ def get_results_for_learning_rates(input_df,
 
         for learning_rate_theta in learning_rates_theta:
             for learning_rate_lambda in learning_rates_lambda:
-                for learning_rate_W in learning_rates_W:
+                for learning_rate_W in learning_rates_W:   ###### They are learning W's
                     t_start_iter = time.time() - ts
                     print("Time since start:", t_start_iter)
                     print("Starting optimizing learning rate theta: %.3f, learning rate lambda: %.3f, learning rate W: %.3f" % (learning_rate_theta, learning_rate_lambda, learning_rate_W))
@@ -913,7 +917,7 @@ def get_results_for_learning_rates(input_df,
                           val_df,
                           test_df,
                           protected_columns, 
-                          proxy_columns, 
+                          proxy_columns,  
                           label_column,
                           minibatch_size=minibatch_size,
                           num_iterations_per_loop=num_iterations_per_loop,
