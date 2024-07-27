@@ -16,6 +16,7 @@ import optimization
 import model
 import utils
 
+W_multiplier = 1
 
 class SoftweightsHeuristicModel(model.Model):
     """Linear model for performing constrained optimization with soft assignments practical algorithm.
@@ -35,7 +36,7 @@ class SoftweightsHeuristicModel(model.Model):
     """   
     def __init__(self, b, true_group_marginals, feature_names, protected_columns, label_column, maximum_lambda_radius=None):
         super().__init__(feature_names, protected_columns, label_column, maximum_lambda_radius=maximum_lambda_radius)
-        self.W_num_rows = 4*self.num_groups
+        self.W_num_rows = W_multiplier*self.num_groups
         self.W_num_cols = self.num_groups
         self.W_flattened_size = self.W_num_rows*self.W_num_cols
         self.b_groups = tf.convert_to_tensor(b, dtype=tf.float32)
@@ -568,7 +569,7 @@ def get_v_arrays_from_data(df, proxy_columns, label_column):
     full_v_array = np.array(v_list)
     # Mask v_list to create m different vectors in R^4m.
     num_groups = len(proxy_columns)
-    W_num_rows = 4*num_groups
+    W_num_rows = W_multiplier*num_groups
     # W_num_cols = num_groups
     v_arrays = []
     for j in range(num_groups):
@@ -586,7 +587,7 @@ def get_flattened_v_array(v, j, num_groups):
       v: tensor in R^4m.
       j: int, zero indexed column number of W.
     """ 
-    W_num_rows = 4*num_groups
+    W_num_rows = W_multiplier*num_groups
     W_num_cols = num_groups
     W_flattened_size = W_num_rows * W_num_cols
     front_padding = W_num_rows * j
@@ -604,7 +605,7 @@ def get_ones_for_row_array(i, num_groups):
     Args:
       i: int, zero indexed row number of W.
     """
-    W_num_rows = 4*num_groups
+    W_num_rows = W_multiplier*num_groups
     W_num_cols = num_groups
     W_flattened_size = W_num_rows * W_num_cols
     flattened_ones = np.zeros((W_flattened_size,))
@@ -623,7 +624,7 @@ def build_A_eq_array(df, proxy_columns, label_column, v_arrays):
             # By convention, the inner loop k represents the proxy group.
             A_eq.append(get_flattened_v_array(v_arrays[k], j, num_groups))
     # Add simplex constraints.
-    W_num_rows = 4*num_groups
+    W_num_rows = W_multiplier*num_groups
     for i in range(W_num_rows):
         A_eq.append(get_ones_for_row_array(i, num_groups))
     A_eq = np.array(A_eq)
