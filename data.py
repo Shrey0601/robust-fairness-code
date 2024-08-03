@@ -82,8 +82,15 @@ def load_dataset_lawschool():  ##### This function is used to load the lawschool
     Returns: 
       A pandas dataframe with all string features converted to binary one hot encodings.
     """
-    data_path = os.path.join("data/law_school_dataset")
+    data_path = os.path.join("data/law_school_processed.csv")
     df = pd.read_csv(data_path)
+    # Quantize continuous features
+    continuous_features = ['lsat', 'ugpa', 'age', 'dnn_bar_pass_prediction', 'gpa']
+    for feature in continuous_features:
+        df[feature] = pd.qcut(df[feature], 4, labels=range(4))
+    categorical_features = ['sex', 'race', 'grad', 'bar1', 'bar2',
+       'gender', 'parttime', 'male', 'pass_bar', 'bar', 'tier']
+    df = pd.get_dummies(df, columns=continuous_features + categorical_features)
     return df
 
 
