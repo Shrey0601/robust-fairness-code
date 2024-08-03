@@ -59,6 +59,33 @@ def load_dataset_credit():
     df = pd.get_dummies(df, columns=continuous_features + categorical_features)
     return df
 
+def preprocess_data_lawschool(output_dir, protected_column='race1', proxy_noises=[0.1,0.2,0.3,0.4,0.5]):
+    data_path = os.path.join("/workspaces/robust-fairness-code/data/law_school_dataset.csv")
+    columns_to_read = ['decile1b', 'decile3', 'ID', 'decile1', 'sex', 'race', 'cluster',
+       'lsat', 'ugpa', 'zfygpa', 'DOB_yr', 'grad', 'zgpa', 'bar1', 'bar1_yr',
+       'bar2', 'bar2_yr', 'fulltime', 'fam_inc', 'age', 'gender', 'parttime',
+       'male', 'race1', 'race2', 'Dropout', 'other', 'asian', 'black', 'hisp',
+       'pass_bar', 'bar', 'bar_passed', 'tier', 'index6040', 'indxgrp',
+       'indxgrp2', 'dnn_bar_pass_prediction', 'gpa']
+    df = pd.read_csv(data_path, usecols=columns_to_read)
+    df = pd.get_dummies(df, columns=[protected_column])
+    columns_to_keep = ['sex', 'race', 'lsat', 'ugpa', 'grad', 'bar1', 'bar2', 'age', 'gender', 'parttime', 'male', 'race1_asian', 'race1_black', 'race1_hisp', 'race1_other', 'race1_white', 'pass_bar', 'bar', 'tier', 'dnn_bar_pass_prediction', 'gpa']
+    df = df[columns_to_keep]
+    protected_columns = ['race1_asian', 'race1_black', 'race1_hisp', 'race1_other', 'race1_white']
+    for noise in proxy_noises:
+        df = generate_proxy_columns(df, protected_columns, noise_param=noise)
+    df.to_csv(path_or_buf=os.path.join(output_dir, "law_school_processed.csv"), index=False)
+
+def load_dataset_lawschool():  ##### This function is used to load the lawschool dataset
+    """ Loads lawschool dataset from preprocessed data file.
+
+    Returns: 
+      A pandas dataframe with all string features converted to binary one hot encodings.
+    """
+    data_path = os.path.join("data/law_school_dataset")
+    df = pd.read_csv(data_path)
+    return df
+
 
 def preprocess_data_nypd(output_dir):
     """ Preprocesses nypd frisk data from original nypd_2012.csv
@@ -434,6 +461,7 @@ def generate_proxy_columns(df, protected_columns, noise_param=1):
     noise_idx = random.sample(range(num_datapoints), int(noise_param * num_datapoints))
     proxy_groups = np.zeros((num_groups, num_datapoints))
     df_proxy = df.copy()
+    # empty_rows = []
     for i in range(num_groups):
         df_proxy[proxy_columns[i]] = df_proxy[protected_columns[i]]
     for j in noise_idx:
@@ -449,6 +477,8 @@ def generate_proxy_columns(df, protected_columns, noise_param=1):
                 break
         if group_index == -1:
             print('missing group information for datapoint ', j)
+            # empty_rows.append(j)
+    # df_proxy = df_proxy.drop(empty_rows)
     return df_proxy
 
 
