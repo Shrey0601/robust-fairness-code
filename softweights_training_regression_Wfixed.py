@@ -16,7 +16,7 @@ import optimization
 import model
 import utils
 
-W_multiplier = 1
+W_multiplier = 4
 
 class SoftweightsHeuristicModel(model.Model):
     """Linear model for performing constrained optimization with soft assignments practical algorithm.
@@ -313,7 +313,7 @@ class SoftweightsHeuristicModel(model.Model):
         return constraints_list
     
     
-    def build_train_ops(self, constraint='tpr', learning_rate_theta=0.01, learning_rate_lambda=0.01, 
+    def build_train_ops(self, b, constraint='tpr', learning_rate_theta=0.01, learning_rate_lambda=0.01, 
                         learning_rate_W=0.01, constraints_slack=1.0, num_projection_iters=20):
         """Builds operators that take gradient steps during training.
         
@@ -326,22 +326,22 @@ class SoftweightsHeuristicModel(model.Model):
         """
         # Hinge loss objective.
         self.objective = tf.losses.hinge_loss(self.labels_placeholder, self.predictions_tensor)
-       
         # Create A matrix for projection.
-        self.build_A_groups()
-        self.build_A_simplex()
+        # self.build_A_groups()
+        # self.build_A_simplex()
         
         # Create W variable.  ##### Here the W variable is created [0,0,....0]
         self.num_projection_iters=num_projection_iters
         # initial_W = np.zeros((self.W_num_rows, self.W_num_cols), dtype=np.float32)   ##### Check 
-        b = build_b(self.df, self.proxy_columns, self.protected_columns, include_simplex_constraints=False)
-        initial_W = np.array(b, dtype=np.float32).reshape((self.W_num_rows, self.W_num_cols))
+        # b = build_b(self.df, self.proxy_columns, self.protected_columns, include_simplex_constraints=False)
+        b_transformed = np.repeat(b, 4)
+        initial_W = np.array(b_transformed, dtype=np.float32).reshape((self.W_num_rows, self.W_num_cols))
         self.W_variable = tf.compat.v2.Variable(
           initial_W,
           trainable=False,
           name="W",
           dtype=tf.float32,
-          constraint=self.project_W
+        #   constraint=self.project_W
         )
         
         ##### theta variable is defined in model.py with name self.theta_variables
@@ -913,7 +913,7 @@ def get_results_for_learning_rates(input_df,
                     print("Time since start:", t_start_iter)
                     print("Starting optimizing learning rate theta: %.3f, learning rate lambda: %.3f, learning rate W: %.3f" % (learning_rate_theta, learning_rate_lambda, learning_rate_W))
                     sw_model = SoftweightsHeuristicModel(b, true_group_marginals, feature_names, proxy_columns, label_column, maximum_lambda_radius=1.0)
-                    sw_model.build_train_ops(constraint=constraint, learning_rate_theta=learning_rate_theta, learning_rate_lambda=learning_rate_lambda, learning_rate_W=learning_rate_W, constraints_slack=constraints_slack)
+                    sw_model.build_train_ops(b, constraint=constraint, learning_rate_theta=learning_rate_theta, learning_rate_lambda=learning_rate_lambda, learning_rate_W=learning_rate_W, constraints_slack=constraints_slack)
 
                     # training_helper returns the list of errors and violations over each epoch.
                     results_dict = training_helper(
