@@ -15,7 +15,7 @@ source ~/.bashrc
 
 pyenv install 3.7.12
 pyenv global 3.7.12
-
+/home/codespace/.pyenv/versions/3.7.12/bin/python3.7 -m pip install --upgrade pip
 pip install virtualenv
 
 python -m venv work
