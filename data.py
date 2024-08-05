@@ -69,7 +69,7 @@ def preprocess_data_lawschool(output_dir, protected_column='race1', proxy_noises
        'indxgrp2', 'dnn_bar_pass_prediction', 'gpa']
     df = pd.read_csv(data_path, usecols=columns_to_read)
     df = pd.get_dummies(df, columns=[protected_column])
-    columns_to_keep = ['sex', 'race', 'lsat', 'ugpa', 'grad', 'bar1', 'bar2', 'age', 'gender', 'parttime', 'male', 'race1_asian', 'race1_black', 'race1_hisp', 'race1_other', 'race1_white', 'pass_bar', 'bar', 'tier', 'dnn_bar_pass_prediction', 'gpa']
+    columns_to_keep = ['sex', 'race', 'lsat', 'grad', 'bar1', 'bar2', 'age', 'gender', 'parttime', 'male', 'race1_asian', 'race1_black', 'race1_hisp', 'race1_other', 'race1_white', 'pass_bar', 'bar', 'tier', 'dnn_bar_pass_prediction', 'gpa']
     df = df[columns_to_keep]
     protected_columns = ['race1_asian', 'race1_black', 'race1_hisp', 'race1_other', 'race1_white']
     for noise in proxy_noises:
@@ -85,7 +85,7 @@ def load_dataset_lawschool():  ##### This function is used to load the lawschool
     data_path = os.path.join("data/law_school_processed.csv")
     df = pd.read_csv(data_path)
     # Quantize continuous features
-    continuous_features = ['lsat', 'ugpa', 'age', 'dnn_bar_pass_prediction', 'gpa']
+    continuous_features = ['lsat', 'age', 'dnn_bar_pass_prediction']
     for feature in continuous_features:
         df[feature] = pd.qcut(df[feature], 4, labels=range(4))
     categorical_features = ['sex', 'race', 'grad', 'bar1', 'bar2',

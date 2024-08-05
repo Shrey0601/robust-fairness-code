@@ -9,7 +9,7 @@ import random
 from scipy.optimize import linprog
 import tensorflow as tf
 import time
-
+from sklearn.metrics import mean_squared_error, mean_absolute_error, r2_score
 import data
 import losses
 import optimization
@@ -325,7 +325,7 @@ class SoftweightsHeuristicModel(model.Model):
         
         """
         # Hinge loss objective.
-        self.objective = tf.losses.hinge_loss(self.labels_placeholder, self.predictions_tensor)
+        self.objective = tf.losses.mean_squared_error(self.labels_placeholder, self.predictions_tensor)
         # Create A matrix for projection.
         # self.build_A_groups()
         # self.build_A_simplex()
@@ -767,6 +767,9 @@ def training_helper(sw_model,
     train_01_true_G_constraints_matrix = []
     train_01_proxy_Ghat_constraints_matrix = []
     train_01_robust_constraints_matrix = []
+    train_mse_vector = []
+    train_mae_vector = []
+    train_r2_vector = []
 
     lambda_variables_matrix = []
     W_variables_matrix = []
@@ -775,6 +778,9 @@ def training_helper(sw_model,
     val_01_true_G_constraints_matrix = []
     val_01_proxy_Ghat_constraints_matrix = []
     val_01_robust_constraints_matrix = []
+    val_mse_vector = []
+    val_mae_vector = []
+    val_r2_vector = []
     
     # List of T scalar values representing the 01 objective at each iteration.
     test_01_objective_vector = []
@@ -783,6 +789,9 @@ def training_helper(sw_model,
     test_01_true_G_constraints_matrix = []
     test_01_proxy_Ghat_constraints_matrix = []
     test_01_robust_constraints_matrix = []
+    test_mse_vector = []
+    test_mae_vector = []
+    test_r2_vector = []
 
     true_group_marginals = get_true_group_marginals(train_df, protected_columns)
     for objective, constraints, train_predictions, lambda_variables, W_variable, val_predictions, test_predictions in training_generator(
@@ -794,10 +803,16 @@ def training_helper(sw_model,
         train_df.loc[:, 'predictions'] = train_predictions
         train_01_objective, train_01_true_G_constraints, train_01_proxy_Ghat_constraints, train_01_robust_constraints = get_error_rate_and_constraints_softweights(
             train_df, W_variable, protected_columns, proxy_columns, label_column, true_group_marginals, optimize_robust_constraints=optimize_robust_constraints, max_diff=max_diff, constraint=constraint)
+        train_mse = mean_squared_error(train_df[label_column], train_predictions)
+        train_mae = mean_absolute_error(train_df[label_column], train_predictions)
+        train_r2 = r2_score(train_df[label_column], train_predictions)
         train_01_objective_vector.append(train_01_objective)
         train_01_true_G_constraints_matrix.append(train_01_true_G_constraints)
         train_01_proxy_Ghat_constraints_matrix.append(train_01_proxy_Ghat_constraints)
         train_01_robust_constraints_matrix.append(train_01_robust_constraints)
+        train_mse_vector.append(train_mse)
+        train_mae_vector.append(train_mae)
+        train_r2_vector.append(train_r2)
         
         lambda_variables_matrix.append(lambda_variables)
         W_variables_matrix.append(W_variable)
@@ -805,18 +820,30 @@ def training_helper(sw_model,
         val_df.loc[:, 'predictions'] = val_predictions
         val_01_objective, val_01_true_G_constraints, val_01_proxy_Ghat_constraints, val_01_robust_constraints = get_error_rate_and_constraints_softweights(
             val_df, W_variable, protected_columns, proxy_columns, label_column, true_group_marginals, optimize_robust_constraints=optimize_robust_constraints, max_diff=max_diff, constraint=constraint)
+        val_mse = mean_squared_error(val_df[label_column], val_predictions)
+        val_mae = mean_absolute_error(val_df[label_column], val_predictions)
+        val_r2 = r2_score(val_df[label_column], val_predictions)
         val_01_objective_vector.append(val_01_objective)
         val_01_true_G_constraints_matrix.append(val_01_true_G_constraints)
         val_01_proxy_Ghat_constraints_matrix.append(val_01_proxy_Ghat_constraints)
         val_01_robust_constraints_matrix.append(val_01_robust_constraints)
+        val_mse_vector.append(val_mse)
+        val_mae_vector.append(val_mae)
+        val_r2_vector.append(val_r2)
         
         test_df.loc[:, 'predictions'] = test_predictions
         test_01_objective, test_01_true_G_constraints, test_01_proxy_Ghat_constraints, test_01_robust_constraints = get_error_rate_and_constraints_softweights(
             test_df, W_variable, protected_columns, proxy_columns, label_column, true_group_marginals, optimize_robust_constraints=optimize_robust_constraints, max_diff=max_diff, constraint=constraint)
+        test_mse = mean_squared_error(test_df[label_column], test_predictions)
+        test_mae = mean_absolute_error(test_df[label_column], test_predictions)
+        test_r2 = r2_score(test_df[label_column], test_predictions)
         test_01_objective_vector.append(test_01_objective)
         test_01_true_G_constraints_matrix.append(test_01_true_G_constraints)
         test_01_proxy_Ghat_constraints_matrix.append(test_01_proxy_Ghat_constraints)
         test_01_robust_constraints_matrix.append(test_01_robust_constraints)
+        test_mse_vector.append(test_mse)
+        test_mae_vector.append(test_mae)
+        test_r2_vector.append(test_r2)
         
     return {'train_hinge_objective_vector': train_hinge_objective_vector, 
             'train_hinge_constraints_matrix': train_hinge_constraints_matrix, 
@@ -833,7 +860,16 @@ def training_helper(sw_model,
             'test_01_objective_vector': test_01_objective_vector, 
             'test_01_true_G_constraints_matrix': test_01_true_G_constraints_matrix, 
             'test_01_proxy_Ghat_constraints_matrix': test_01_proxy_Ghat_constraints_matrix,
-            'test_01_robust_constraints_matrix': test_01_robust_constraints_matrix}
+            'test_01_robust_constraints_matrix': test_01_robust_constraints_matrix,
+            'train_mse_vector': train_mse_vector, 
+            'train_mae_vector': train_mae_vector, 
+            'train_r2_vector': train_r2_vector, 
+            'val_mse_vector': val_mse_vector, 
+            'val_mae_vector': val_mae_vector, 
+            'val_r2_vector': val_r2_vector, 
+            'test_mse_vector': test_mse_vector, 
+            'test_mae_vector': test_mae_vector, 
+            'test_r2_vector': test_r2_vector}
 
 
 def build_b(input_df, proxy_groups, true_groups, include_simplex_constraints=False):   ##### simplex constrainits set to false
@@ -971,14 +1007,16 @@ def get_results_for_learning_rates(input_df,
         print("time it took for this split", time.time() - t_split)
         print('best true G constraint violations', best_results_dict['best_train_01_true_G_constraints_matrix'])
     final_average_results_dict = utils.average_results_dict_fn(results_dicts_runs)
-    
+    print("############### Final Results ###############")
+    print(final_average_results_dict)
+    train_df.to_csv("data/Trained_predictions.csv")
     return final_average_results_dict
 
 
 def add_results_dict_best_idx(results_dict, best_index):
-    columns_to_add = ['train_01_objective_vector', 'train_01_true_G_constraints_matrix', 'train_01_proxy_Ghat_constraints_matrix', 'train_01_robust_constraints_matrix', 
-                     'val_01_objective_vector', 'val_01_true_G_constraints_matrix', 'val_01_proxy_Ghat_constraints_matrix', 'val_01_robust_constraints_matrix', 
-                     'test_01_objective_vector', 'test_01_true_G_constraints_matrix', 'test_01_proxy_Ghat_constraints_matrix', 'test_01_robust_constraints_matrix']
+    columns_to_add = ['train_01_objective_vector', 'train_01_true_G_constraints_matrix', 'train_01_proxy_Ghat_constraints_matrix', 'train_01_robust_constraints_matrix',  'train_mse_vector',  'train_mae_vector',  'train_r2_vector',
+                     'val_01_objective_vector', 'val_01_true_G_constraints_matrix', 'val_01_proxy_Ghat_constraints_matrix', 'val_01_robust_constraints_matrix',  'val_mse_vector',  'val_mae_vector',  'val_r2_vector',
+                     'test_01_objective_vector', 'test_01_true_G_constraints_matrix', 'test_01_proxy_Ghat_constraints_matrix', 'test_01_robust_constraints_matrix', 'test_mse_vector',  'test_mae_vector',  'test_r2_vector']
     for column in columns_to_add:
         results_dict['best_' + column] = results_dict[column][best_index]
     return results_dict
