@@ -47,7 +47,7 @@ class Model(object):
             hidden = tf.layers.dense(inputs=self.features_placeholder, units=hidden_layer_size, activation=tf.nn.relu,name="model0")
             self.predictions_tensor = tf.layers.dense(inputs=hidden, units=1, activation=None, name="model")
         else:
-            self.predictions_tensor = tf.layers.dense(inputs=self.features_placeholder, units=1, activation=None, name="model")
+            self.predictions_tensor = tf.layers.dense(inputs=self.features_placeholder, units=1, activation=tf.nn.sigmoid, name="model")
         self.theta_variables = tf.compat.v1.get_collection(tf.compat.v1.GraphKeys.TRAINABLE_VARIABLES, "model*")
         
     def feed_dict_helper(self, dataframe):

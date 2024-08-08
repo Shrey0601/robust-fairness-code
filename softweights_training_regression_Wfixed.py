@@ -277,6 +277,32 @@ class SoftweightsHeuristicModel(model.Model):
             constraints_list.append(Wterm - average_concave_hinge - (constraints_slack * tf.ones_like(average_concave_hinge)))
         return constraints_list
     
+    def get_bounded_group_loss_constraints(self, constraints_slack=1.0):
+        constraints_list = []
+        
+        # Compute the overall average loss (e.g., MSE) for all samples
+        overall_mse = tf.reduce_mean(tf.square(self.labels_placeholder - self.predictions_tensor))
+        
+        # Compute the loss for each group
+        for j in range(self.num_groups):
+            # Get group indices
+            group_indices = tf.where(tf.equal(self.group_labels, j))
+            
+            # Gather labels and predictions for the group
+            group_labels = tf.gather(self.labels_placeholder, group_indices)
+            group_predictions = tf.gather(self.predictions_tensor, group_indices)
+            
+            # Compute the mean squared error for the group
+            group_mse = tf.reduce_mean(tf.square(group_labels - group_predictions))
+            
+            # Create a constraint that the difference between the group's MSE and the overall MSE is within the slack
+            constraint = tf.abs(group_mse - overall_mse) - constraints_slack
+            
+            # Append the constraint to the list
+            constraints_list.append(constraint)
+        
+        return constraints_list
+
     
     def get_equal_tpr_constraints(self, constraints_slack=1.0):
         constraints_list = []
