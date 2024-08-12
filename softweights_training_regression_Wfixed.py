@@ -59,7 +59,32 @@ class SoftweightsHeuristicModel(model.Model):
             r_list.append(0) 
         assert(len(r_list) == (self.W_num_rows))
         self.r_tensor = tf.convert_to_tensor(r_list)
-        
+    
+    def build_r_tensor_bgl(self):
+        """Build r tensors for bounded group loss (BGL) in a regression setting."""
+        # Build r_1 (numerator r)
+        r_list_1 = []
+        for protected_placeholder in self.protected_placeholders:
+            # Compute weighted MSE for each group
+            weighted_mse = tf.losses.mean_squared_error(
+                self.labels_placeholder,
+                self.predictions_tensor,
+                weights=protected_placeholder,
+                reduction=tf.compat.v1.losses.Reduction.SUM
+            )
+            r_list_1.append(weighted_mse)
+        assert len(r_list_1) == self.W_num_rows
+        self.r_tensor_1_bgl = tf.convert_to_tensor(r_list_1)
+
+        # Build r_2 (denominator r)
+        r_list_2 = []
+        for protected_placeholder in self.protected_placeholders:
+            # Compute sum of weights for each group (equivalent to group size)
+            group_size = tf.reduce_sum(protected_placeholder)
+            r_list_2.append(group_size if group_size != 0 else 1e-8)  # Avoid division by zero
+        assert len(r_list_2) == self.W_num_rows
+        self.r_tensor_2_bgl = tf.convert_to_tensor(r_list_2)
+
         
     def build_r_tensor_tpr(self):
         # Build r_1 (numerator r)
@@ -145,7 +170,7 @@ class SoftweightsHeuristicModel(model.Model):
         self.r_tensor_2_fpr = tf.convert_to_tensor(r_list_2)
     
     
-    def build_r_tensor(self, constraint='tpr'):
+    def build_r_tensor(self, constraint='bgl'):
         if constraint == 'err':
             self.build_r_tensor_err()
         elif constraint == 'tpr':
@@ -153,6 +178,8 @@ class SoftweightsHeuristicModel(model.Model):
         elif constraint == 'tpr_and_fpr':
             self.build_r_tensor_tpr()
             self.build_r_tensor_fpr()
+        elif constraint == 'bgl':
+            self.build_r_tensor_bgl()
         else:
             raise('constraint not recognized.')
     
@@ -303,6 +330,19 @@ class SoftweightsHeuristicModel(model.Model):
         
         return constraints_list
 
+    def get_equal_bgl_constraints(self, constraints_slack=1.0):
+        constraints_list = []
+        average_mse = tf.losses.mean_squared_error(self.labels_placeholder, self.predictions_tensor, reduction=tf.compat.v1.losses.Reduction.MEAN)
+        for j in range(self.num_groups):
+            # Compute r^T W e_j
+            W_j = tf.gather(self.W_variable, j, axis=1)
+            Wterm_numerator = tf.tensordot(self.r_tensor_1_bgl, W_j, 1)
+            Wterm_denominator = tf.tensordot(self.r_tensor_2_bgl, W_j, 1) + tf.ones_like(Wterm_numerator)  # Prevent denominator from being 0.
+            # divide
+            Wterm = tf.math.divide(Wterm_numerator, Wterm_denominator)
+            constraints_list.append(average_mse - Wterm - (constraints_slack * tf.ones_like(average_mse)))
+        return constraints_list
+
     
     def get_equal_tpr_constraints(self, constraints_slack=1.0):
         constraints_list = []
@@ -339,7 +379,7 @@ class SoftweightsHeuristicModel(model.Model):
         return constraints_list
     
     
-    def build_train_ops(self, b, constraint='tpr', learning_rate_theta=0.01, learning_rate_lambda=0.01, 
+    def build_train_ops(self, b, constraint='bgl', learning_rate_theta=0.01, learning_rate_lambda=0.01, 
                         learning_rate_W=0.01, constraints_slack=1.0, num_projection_iters=20):
         """Builds operators that take gradient steps during training.
         
@@ -381,6 +421,8 @@ class SoftweightsHeuristicModel(model.Model):
             constraints_list = self.get_equal_tpr_constraints(constraints_slack=constraints_slack)   ##### ensures g(theta) <= 0
         elif constraint == 'tpr_and_fpr':
             constraints_list = self.get_equal_tpr_and_fpr_constraints(constraints_slack=constraints_slack)
+        elif constraint == 'bgl':
+            constraints_list = self.get_equal_bgl_constraints(constraints_slack=constraints_slack)
         self.num_constraints = len(constraints_list)
         self.constraints = tf.convert_to_tensor(constraints_list)
         
@@ -477,6 +519,35 @@ def training_generator(sw_model,
         W_variable = session.run(sw_model.W_variable)
 
         yield (objective, constraints, train_predictions, lambda_variables, W_variable, val_predictions, test_predictions)
+
+def get_r_from_data_bgl(df, proxy_columns, label_column):
+    """Calculate r arrays for bounded group loss (BGL) in a regression setting."""
+    # r for numerator
+    r_list_1 = []
+
+    for proxy_column in proxy_columns:
+        # Compute group mean squared error
+        group_predictions = df['predictions'] * df[proxy_column]
+        group_labels = df[label_column] * df[proxy_column]
+
+        # r[k]: mean squared error for group = k
+        mse_numerator = np.sum((group_predictions - group_labels) ** 2)
+        r_list_1.append(mse_numerator)
+
+    r_list_1_array = np.array(r_list_1)
+
+    # r for denominator
+    r_list_2 = []
+    for proxy_column in proxy_columns:
+        # Compute group size for normalization
+        group_size = np.sum(df[proxy_column])
+
+        # r[k]: normalization factor for group = k (avoid division by zero with epsilon)
+        r_list_2.append(group_size if group_size != 0 else 1e-8)
+
+    r_list_2_array = np.array(r_list_2)
+
+    return r_list_1_array, r_list_2_array
 
 
 def get_r_from_data_tpr(df, proxy_columns, label_column):
@@ -682,6 +753,22 @@ def get_optimized_robust_constraints(df, proxy_columns, protected_columns, label
         robust_constraints.append(robust_constraint)
     return robust_constraints
 
+def get_robust_constraints_bgl(df, W, proxy_columns, label_column, true_group_marginals, max_diff=0.05):
+    """Computes robust constraints for softweights using an existing W for regression."""
+    # Compute r
+    r_array_1, r_array_2 = get_r_from_data_bgl(df, proxy_columns, label_column)
+
+    robust_constraints = []
+    overall_mse = np.mean((df['predictions'] - df[label_column]) ** 2)  # Overall MSE
+    for j in range(len(true_group_marginals)):
+        Wterm_numerator = np.dot(r_array_1, W.T[j])
+        Wterm_denominator = np.dot(r_array_2, W.T[j])
+        Wterm = Wterm_numerator / Wterm_denominator
+        robust_constraint = overall_mse - Wterm - max_diff
+        robust_constraints.append(robust_constraint)
+    return robust_constraints
+
+
 def get_robust_constraints_tpr(df, W, proxy_columns, label_column, true_group_marginals, max_diff=0.05):
     """Computes robust constraints for softweights using an exising W."""
     # Compute r
@@ -733,7 +820,7 @@ def get_robust_constraints_err(df, W, proxy_columns, label_column, true_group_ma
     return robust_constraints
 
 
-def get_robust_constraints(df, W, proxy_columns, label_column, true_group_marginals, constraint='tpr', max_diff=0.05):
+def get_robust_constraints(df, W, proxy_columns, label_column, true_group_marginals, constraint='bgl', max_diff=0.05):
     """Computes robust constraints for softweights using an exising W."""
     # Compute r
     robust_constraints = None
@@ -747,6 +834,8 @@ def get_robust_constraints(df, W, proxy_columns, label_column, true_group_margin
         robust_constraints_tpr = get_robust_constraints_tpr(df, W, proxy_columns, label_column, true_group_marginals, max_diff=max_diff)
         robust_constraints_fpr = get_robust_constraints_fpr(df, W, proxy_columns, label_column, true_group_marginals, max_diff=max_diff)
         robust_constraints = robust_constraints_tpr + robust_constraints_fpr
+    elif constraint == 'bgl':
+        robust_constraints = get_robust_constraints_bgl(df, W, proxy_columns, label_column, true_group_marginals, max_diff=max_diff)
     else:
         raise("constraint not supported.")
     return robust_constraints
@@ -754,7 +843,7 @@ def get_robust_constraints(df, W, proxy_columns, label_column, true_group_margin
 
 
 def get_error_rate_and_constraints_softweights(df, W, protected_columns, proxy_columns, label_column, 
-    true_group_marginals, constraint='tpr', max_diff=0.05, optimize_robust_constraints=False):
+    true_group_marginals, constraint='bgl', max_diff=0.05, optimize_robust_constraints=False):
     """Computes the error and fairness violations. Currently only computes tpr violations.
     
     Args:
@@ -785,7 +874,7 @@ def training_helper(sw_model,
                     optimize_robust_constraints=False,
                     num_iterations_W=1,
                     max_diff=0.05,
-                    constraint='tpr'):
+                    constraint='bgl'):
     train_hinge_objective_vector = []
     # Hinge loss constraint violations on the proxy groups.
     train_hinge_constraints_matrix = []
@@ -931,7 +1020,7 @@ def get_true_group_marginals(input_df, true_groups):
 
 def get_results_for_learning_rates(input_df, 
                                     feature_names, protected_columns, proxy_columns, label_column, 
-                                    constraint = 'tpr', 
+                                    constraint = 'bgl', 
                                     learning_rates_theta = [0.1], 
                                     learning_rates_lambda = [1], 
                                     learning_rates_W = [0.1], 
@@ -1050,7 +1139,7 @@ def add_results_dict_best_idx(results_dict, best_index):
 
 def train_one_model(input_df, 
                     feature_names, protected_columns, proxy_columns, label_column, 
-                    constraint = 'tpr', 
+                    constraint = 'bgl', 
                     learning_rate_theta = 0.01, 
                     learning_rate_lambda = 1, 
                     learning_rate_W = 0.01,

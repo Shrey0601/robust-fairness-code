@@ -23,4 +23,4 @@ source work/bin/activate
 pip install tensorflow==1.15.0
 pip install protobuf==3.20.3
 export PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION=python
-pip install pandas matplotlib scipy
+pip install pandas matplotlib scipy scikit-learn
