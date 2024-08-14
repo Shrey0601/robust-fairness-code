@@ -15,6 +15,7 @@ import losses
 import optimization
 import model
 import utils
+import itertools
 
 W_multiplier = 4
 
@@ -73,6 +74,7 @@ class SoftweightsHeuristicModel(model.Model):
                 reduction=tf.compat.v1.losses.Reduction.SUM
             )
             r_list_1.append(weighted_mse)
+        r_list_1 = list(itertools.chain.from_iterable(itertools.repeat(x, 4) for x in r_list_1))
         assert len(r_list_1) == self.W_num_rows
         self.r_tensor_1_bgl = tf.convert_to_tensor(r_list_1)
 
@@ -82,6 +84,7 @@ class SoftweightsHeuristicModel(model.Model):
             # Compute sum of weights for each group (equivalent to group size)
             group_size = tf.reduce_sum(protected_placeholder)
             r_list_2.append(group_size if group_size != 0 else 1e-8)  # Avoid division by zero
+        r_list_2 = list(itertools.chain.from_iterable(itertools.repeat(x, 4) for x in r_list_2))
         assert len(r_list_2) == self.W_num_rows
         self.r_tensor_2_bgl = tf.convert_to_tensor(r_list_2)
 
@@ -532,7 +535,7 @@ def get_r_from_data_bgl(df, proxy_columns, label_column):
         # r[k]: mean squared error for group = k
         mse_numerator = np.sum((group_predictions - group_labels) ** 2)
         r_list_1.append(mse_numerator)
-
+    r_list_1 = list(itertools.chain.from_iterable(itertools.repeat(x, 4) for x in r_list_1))
     r_list_1_array = np.array(r_list_1)
 
     # r for denominator
@@ -543,7 +546,7 @@ def get_r_from_data_bgl(df, proxy_columns, label_column):
 
         # r[k]: normalization factor for group = k (avoid division by zero with epsilon)
         r_list_2.append(group_size if group_size != 0 else 1e-8)
-
+    r_list_2 = list(itertools.chain.from_iterable(itertools.repeat(x, 4) for x in r_list_2))
     r_list_2_array = np.array(r_list_2)
 
     return r_list_1_array, r_list_2_array
@@ -1040,7 +1043,8 @@ def get_results_for_learning_rates(input_df,
     ts = time.time()
     # 10 runs with mean and stddev
     results_dicts_runs = []
-    for i in range(num_runs):
+    for i in range(1):
+        print("CONSTRAINT", constraint)
         print('Split %d of %d' % (i, num_runs))
         t_split = time.time()
 

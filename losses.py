@@ -179,6 +179,18 @@ def error_rate(predictions, labels):
   numerator = (np.multiply(signed_labels, predictions) <= 0).sum()
   denominator = predictions.shape[0]
   return float(numerator) / float(denominator)
+import tensorflow as tf
+
+def mse(df, label_column):
+    """
+    Computes the mean squared error (MSE) between the predicted and actual labels.
+    """
+    # Extract labels and predictions from the dataset
+    true_labels = df[label_column]
+    predictions = df['predictions']  # Assuming 'predictions' column contains the model's predictions
+    # Compute the MSE
+    mse_value = tf.reduce_mean(tf.square(true_labels - predictions))
+    return mse_value
 
 def tpr(df, label_column):
     """
@@ -240,5 +252,19 @@ def get_error_rate_and_constraints(df, protected_columns, proxy_columns, label_c
       proxy_Ghat_constraints_tpr = [tpr_overall - tpr(protected_df, label_column) - max_diff_tpr for protected_df in proxy_Ghat_protected_dfs]
       proxy_Ghat_constraints_fpr = [fpr(protected_df, label_column) - fpr_overall - max_diff_fpr for protected_df in proxy_Ghat_protected_dfs] 
       proxy_Ghat_constraints = proxy_Ghat_constraints_tpr + proxy_Ghat_constraints_fpr
+    elif constraint == 'bgl':
+      # Calculate the overall MSE (or other loss metric)
+      mse_overall = mse(df, label_column)
+      # Calculate the MSE constraints for the true groups (true_G)
+      true_G_constraints = [
+          tf.abs(mse(protected_df, label_column) - mse_overall) - max_diff 
+          for protected_df in true_G_protected_dfs
+      ]
+      
+      # Calculate the MSE constraints for the proxy groups (proxy_Ghat)
+      proxy_Ghat_constraints = [
+          tf.abs(mse(protected_df, label_column) - mse_overall) - max_diff 
+          for protected_df in proxy_Ghat_protected_dfs
+      ]
     return error_rate_overall, true_G_constraints, proxy_Ghat_constraints
 
