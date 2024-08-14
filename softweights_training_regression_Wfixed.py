@@ -436,18 +436,17 @@ class SoftweightsHeuristicModel(model.Model):
           constraint=self.project_lambdas)
         
         ##### Lagrangian loss is calculated here f(theta) + lambda * g(theta) [self.constraints = g(theta) tensor]
-        lagrangian_loss = self.objective + tf.tensordot(
-          tf.cast(self.lambda_variables, dtype=self.constraints.dtype.base_dtype),
-          self.constraints, 1)
+        lagrangian_loss = self.objective
 
         ##### Update the theta, lambda and W variables using the optimizer
         optimizer_theta = tf.train.AdamOptimizer(learning_rate_theta)
-        optimizer_lambda = tf.train.AdamOptimizer(learning_rate_lambda)
+        # optimizer_lambda = tf.train.AdamOptimizer(learning_rate_lambda)
         # optimizer_W = tf.train.AdamOptimizer(learning_rate_W)
 
         self.train_op_theta = optimizer_theta.minimize(lagrangian_loss, var_list=self.theta_variables)
-        self.train_op_lambda = optimizer_lambda.minimize(-lagrangian_loss, var_list=self.lambda_variables)
+        # self.train_op_lambda = optimizer_lambda.minimize(-lagrangian_loss, var_list=self.lambda_variables)
         # self.train_op_W = optimizer_W.minimize(-lagrangian_loss, var_list=self.W_variable)
+        self.train_op_lambda = tf.no_op()
         self.train_op_W = tf.no_op()
         return self.train_op_theta, self.train_op_lambda, self.train_op_W
 
