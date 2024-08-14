@@ -1,4 +1,4 @@
-sex,race,lsat,grad,bar1,bar2,age,gender,parttime,male,race1_asian,race1_black,race1_hisp,race1_other,race1_white,pass_bar,bar,tier,dnn_bar_pass_prediction,gpa,PROX1_0.10_race1_asian,PROX1_0.10_race1_black,PROX1_0.10_race1_his1,PROX1_0.10_race1_other,PROX1_0.10_race1_white,PROX1_0.20_race1_asian,PROX1_0.20_race1_black,PROX1_0.20_race1_his1,PROX1_0.20_race1_other,PROX1_0.20_race1_white,PROX1_0.30_race1_asian,PROX1_0.30_race1_black,PROX1_0.30_race1_his1,PROX1_0.30_race1_other,PROX1_0.30_race1_white,PROX1_0.40_race1_asian,PROX1_0.40_race1_black,PROX1_0.40_race1_his1,PROX1_0.40_race1_other,PROX1_0.40_race1_white,PROX1_0.50_race1_asian,PROX1_0.50_race1_black,PROX1_0.50_race1_his1,PROX1_0.50_race1_other,PROX1_0.50_race1_white
+sex,race,lsat,grad,bar1,bar2,age,gender,parttime,male,race1_asian,race1_black,race1_hisp,race1_other,race1_white,pass_bar,bar,tier,dnn_bar_pass_prediction,gpa,PROXY_0.10_race1_asian,PROXY_0.10_race1_black,PROXY_0.10_race1_hisp,PROXY_0.10_race1_other,PROXY_0.10_race1_white,PROXY_0.20_race1_asian,PROXY_0.20_race1_black,PROXY_0.20_race1_hisp,PROXY_0.20_race1_other,PROXY_0.20_race1_white,PROXY_0.30_race1_asian,PROXY_0.30_race1_black,PROXY_0.30_race1_hisp,PROXY_0.30_race1_other,PROXY_0.30_race1_white,PROXY_0.40_race1_asian,PROXY_0.40_race1_black,PROXY_0.40_race1_hisp,PROXY_0.40_race1_other,PROXY_0.40_race1_white,PROXY_0.50_race1_asian,PROXY_0.50_race1_black,PROXY_0.50_race1_hisp,PROXY_0.50_race1_other,PROXY_0.50_race1_white
 1.0,7.0,44.0,1.0,1,1,-62.0,0.0,0.0,0.0,0,0,0,0,1,1,1,4.0,0.9798045,3.5,0,0,0,0,1,0,0,0,0,1,0,0,0,0,1,0,0,0,0,1,0,0,0,0,1
 1.0,7.0,29.0,1.0,1,1,-62.0,0.0,0.0,0.0,0,0,0,0,1,1,1,2.0,0.9798045,3.5,0,0,0,0,1,0,0,0,0,1,0,0,0,0,1,0,0,0,0,1,0,0,0,0,1
 2.0,7.0,36.0,1.0,1,1,-58.0,1.0,0.0,1.0,0,0,0,0,1,1,1,3.0,0.9798045,3.5,0,0,0,0,1,0,0,0,0,1,1,0,0,0,0,0,0,0,1,0,0,0,0,0,1
@@ -8,6 +8,8 @@ sex,race,lsat,grad,bar1,bar2,age,gender,parttime,male,race1_asian,race1_black,ra
 1.0,7.0,34.0,1.0,1,1,-62.0,0.0,0.0,0.0,0,0,0,0,1,1,1,3.0,0.9798045,3.5,0,0,0,0,1,0,0,0,0,1,0,0,0,0,1,0,0,0,0,1,0,0,0,0,1
 2.0,7.0,40.0,1.0,1,1,-48.0,1.0,1.0,1.0,0,0,0,0,1,1,1,3.0,0.9798045,3.5,0,0,0,0,1,0,0,0,0,1,0,0,0,0,1,0,0,0,0,1,0,0,0,0,1
 2.0,7.0,40.0,1.0,1,1,-61.0,1.0,0.0,1.0,0,0,0,0,1,1,1,5.0,0.9798045,3.5,0,0,0,0,1,0,0,0,0,1,0,0,0,0,1,0,0,0,0,1,0,1,0,0,0
+
+
 1.0,4.0,28.0,1.0,0,0,-62.0,0.0,0.0,0.0,0,0,1,0,0,0,0,1.0,0.9798045,3.5,0,0,1,0,0,0,0,1,0,0,0,1,0,0,0,0,0,0,1,0,1,0,0,0,0
 1.0,7.0,33.0,1.0,0,0,-65.0,0.0,0.0,0.0,0,0,0,0,1,0,0,2.0,0.9798045,3.5,0,0,0,0,1,0,0,0,0,1,0,0,0,1,0,0,0,1,0,0,0,0,0,0,1
 1.0,7.0,36.0,1.0,1,1,-62.0,0.0,0.0,0.0,0,0,0,0,1,1,1,4.0,0.9798045,3.5,0,0,0,0,1,0,0,0,0,1,0,0,0,0,1,0,0,0,0,1,0,0,0,1,0
