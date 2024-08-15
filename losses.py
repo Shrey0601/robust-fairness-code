@@ -179,6 +179,35 @@ def error_rate(predictions, labels):
   numerator = (np.multiply(signed_labels, predictions) <= 0).sum()
   denominator = predictions.shape[0]
   return float(numerator) / float(denominator)
+import tensorflow as tf
+
+def mse(df, label_column):
+    """
+    Computes the mean squared error (MSE) between the predicted and actual labels.
+    """
+    # Extract labels and predictions from the dataset
+    true_labels = df[label_column]
+    predictions = df['predictions']  # Assuming 'predictions' column contains the model's predictions
+    # Ensure numerical data types
+    true_labels = true_labels.astype(np.float32)
+    predictions = predictions.astype(np.float32)
+    # Compute mse
+    mse_value = np.mean(np.square(true_labels - predictions))
+    return mse_value
+
+def calculate_constraints(protected_dfs, label_column, mse_overall, max_diff):
+    constraints = []
+    for protected_df in protected_dfs:
+        mse_protected = mse(protected_df, label_column)
+        constraint = np.abs(mse_protected - mse_overall) - max_diff
+        constraints.append(constraint)
+    return constraints
+
+def bgl_constraint(df, label_column, true_G_protected_dfs, proxy_Ghat_protected_dfs, max_diff):
+    mse_overall = mse(df, label_column)
+    true_G_constraints = calculate_constraints(true_G_protected_dfs, label_column, mse_overall, max_diff)
+    proxy_Ghat_constraints = calculate_constraints(proxy_Ghat_protected_dfs, label_column, mse_overall, max_diff)
+    return true_G_constraints, proxy_Ghat_constraints
 
 def tpr(df, label_column):
     """
@@ -240,5 +269,7 @@ def get_error_rate_and_constraints(df, protected_columns, proxy_columns, label_c
       proxy_Ghat_constraints_tpr = [tpr_overall - tpr(protected_df, label_column) - max_diff_tpr for protected_df in proxy_Ghat_protected_dfs]
       proxy_Ghat_constraints_fpr = [fpr(protected_df, label_column) - fpr_overall - max_diff_fpr for protected_df in proxy_Ghat_protected_dfs] 
       proxy_Ghat_constraints = proxy_Ghat_constraints_tpr + proxy_Ghat_constraints_fpr
+    elif constraint == 'bgl':
+      true_G_constraints, proxy_Ghat_constraints = bgl_constraint(df, label_column, true_G_protected_dfs, proxy_Ghat_protected_dfs, max_diff)
     return error_rate_overall, true_G_constraints, proxy_Ghat_constraints
 
