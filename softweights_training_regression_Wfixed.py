@@ -17,6 +17,8 @@ import model
 import utils
 import itertools
 
+tf.compat.v1.disable_eager_execution()
+
 W_multiplier = 4
 
 class SoftweightsHeuristicModel(model.Model):
@@ -382,7 +384,7 @@ class SoftweightsHeuristicModel(model.Model):
         return constraints_list
     
     
-    def build_train_ops(self, b, constraint='bgl', learning_rate_theta=0.01, learning_rate_lambda=0.01, 
+    def build_train_ops(self, b,  group_labels, constraint='bgl', learning_rate_theta=0.01, learning_rate_lambda=0.01, 
                         learning_rate_W=0.01, constraints_slack=1.0, num_projection_iters=20):
         """Builds operators that take gradient steps during training.
         
@@ -429,6 +431,28 @@ class SoftweightsHeuristicModel(model.Model):
         self.num_constraints = len(constraints_list)
         self.constraints = tf.convert_to_tensor(constraints_list)
         
+        # constraints_list = []
+        # # Compute the overall average loss (e.g., MSE) for all samples
+        # overall_mse = tf.reduce_mean(tf.square(self.labels_placeholder - self.predictions_tensor))
+        
+        # # Compute the loss for each group
+        # for j in range(self.num_groups):
+        #     # Get group indices
+        #     group_indices = tf.where(tf.equal(group_labels, j))
+            
+        #     # Gather labels and predictions for the group
+        #     group_labels = tf.gather(self.labels_placeholder, group_indices)
+        #     group_predictions = tf.gather(self.predictions_tensor, group_indices)
+            
+        #     # Compute the mean squared error for the group
+        #     group_mse = tf.reduce_mean(tf.square(group_labels - group_predictions))
+            
+        #     # Create a constraint that the difference between the group's MSE and the overall MSE is within the slack
+        #     constraint = tf.abs(group_mse - overall_mse) - constraints_slack
+            
+        #     # Append the constraint to the list
+        #     constraints_list.append(constraint)
+
         # Create lagrange multiplier variables.  ##### Here the lambda variables are created [0,0,....0]
         initial_lambdas = np.zeros((self.num_constraints,), dtype=np.float32)
         self.lambda_variables = tf.compat.v2.Variable(
@@ -439,17 +463,18 @@ class SoftweightsHeuristicModel(model.Model):
           constraint=self.project_lambdas)
         
         ##### Lagrangian loss is calculated here f(theta) + lambda * g(theta) [self.constraints = g(theta) tensor]
-        lagrangian_loss = self.objective
+        lagrangian_loss = self.objective + tf.tensordot(
+          tf.cast(self.lambda_variables, dtype=self.constraints.dtype.base_dtype), self.constraints, 1)
 
         ##### Update the theta, lambda and W variables using the optimizer
         optimizer_theta = tf.train.AdamOptimizer(learning_rate_theta)
-        # optimizer_lambda = tf.train.AdamOptimizer(learning_rate_lambda)
+        optimizer_lambda = tf.train.AdamOptimizer(learning_rate_lambda)
         # optimizer_W = tf.train.AdamOptimizer(learning_rate_W)
 
         self.train_op_theta = optimizer_theta.minimize(lagrangian_loss, var_list=self.theta_variables)
-        # self.train_op_lambda = optimizer_lambda.minimize(-lagrangian_loss, var_list=self.lambda_variables)
+        self.train_op_lambda = optimizer_lambda.minimize(-lagrangian_loss, var_list=self.lambda_variables)
         # self.train_op_W = optimizer_W.minimize(-lagrangian_loss, var_list=self.W_variable)
-        self.train_op_lambda = tf.no_op()
+        # self.train_op_lambda = tf.no_op()
         self.train_op_W = tf.no_op()
         return self.train_op_theta, self.train_op_lambda, self.train_op_W
 
@@ -1042,8 +1067,18 @@ def get_results_for_learning_rates(input_df,
                                     ):    
     ts = time.time()
     # 10 runs with mean and stddev
+    grp_labels = []
+    m = {'race1_asian': 0, 'race1_black': 1, 'race1_hisp': 2, 'race1_other': 3, 'race1_white': 4}
+    for i in range(len(input_df)):
+        for j in m.keys():
+            try:
+                if input_df[i][j] == 1:
+                    grp_labels.append(m[j])
+                    break
+            except:
+                grp_labels.append(0)
     results_dicts_runs = []
-    for i in range(1):
+    for i in range(num_runs):
         print("CONSTRAINT", constraint)
         print('Split %d of %d' % (i, num_runs))
         t_split = time.time()
@@ -1067,7 +1102,7 @@ def get_results_for_learning_rates(input_df,
                     print("Time since start:", t_start_iter)
                     print("Starting optimizing learning rate theta: %.3f, learning rate lambda: %.3f, learning rate W: %.3f" % (learning_rate_theta, learning_rate_lambda, learning_rate_W))
                     sw_model = SoftweightsHeuristicModel(b, true_group_marginals, feature_names, proxy_columns, label_column, maximum_lambda_radius=1.0)
-                    sw_model.build_train_ops(b, constraint=constraint, learning_rate_theta=learning_rate_theta, learning_rate_lambda=learning_rate_lambda, learning_rate_W=learning_rate_W, constraints_slack=constraints_slack)
+                    sw_model.build_train_ops(b, constraint=constraint, learning_rate_theta=learning_rate_theta, learning_rate_lambda=learning_rate_lambda, learning_rate_W=learning_rate_W, constraints_slack=constraints_slack, group_labels = grp_labels)
 
                     # training_helper returns the list of errors and violations over each epoch.
                     results_dict = training_helper(
