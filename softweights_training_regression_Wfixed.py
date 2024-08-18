@@ -1044,6 +1044,45 @@ def get_true_group_marginals(input_df, true_groups):
         true_group_marginals.append(marginal)
     return true_group_marginals   ##### calculates the marginal probability (mean) for each true group
 
+# Expects averaged results_dict with means and standard deviations.
+def plot_optimization_avg(results_dict, protected_columns, proxy_columns):
+    fig, axs = plt.subplots(5, figsize=(5,25))
+    hinge_objective_vector = np.array(results_dict['train_hinge_objective_vector'][0])
+    num_iters = len(hinge_objective_vector)
+    iters = np.arange(num_iters)
+    axs[0].errorbar(iters, results_dict['train_hinge_objective_vector'][0], yerr=results_dict['train_hinge_objective_vector'][1])
+    axs[0].set_title('train_hinge_objective_vector')
+    for i in range(len(protected_columns)):
+        axs[1].errorbar(iters, results_dict['train_hinge_constraints_matrix'][0].T[i], results_dict['train_hinge_constraints_matrix'][1].T[i], label=protected_columns[i])
+        axs[2].errorbar(iters, results_dict['train_01_proxy_Ghat_constraints_matrix'][0].T[i], results_dict['train_01_proxy_Ghat_constraints_matrix'][1].T[i], label=proxy_columns[i])
+        axs[3].errorbar(iters, results_dict['train_01_true_G_constraints_matrix'][0].T[i], results_dict['train_01_true_G_constraints_matrix'][1].T[i], label=protected_columns[i])
+        axs[4].errorbar(iters, results_dict['train_01_robust_constraints_matrix'][0].T[i], results_dict['train_01_robust_constraints_matrix'][1].T[i], label=protected_columns[i])
+    axs[1].set_title('train_hinge_constraints_matrix')
+    axs[1].legend()
+    axs[2].set_title('train_01_proxy_Ghat_constraints_matrix')
+    axs[2].legend()
+    axs[3].set_title('train_01_true_G_constraints_matrix')
+    axs[3].legend()
+    axs[4].set_title('train_01_robust_constraints_matrix')
+    axs[4].legend()
+    # plt.show()
+    plt.savefig('optimization_avg.png')
+
+# Expects results dicts without averaging.
+def plot_optimization_softweights(results_dict):
+    fig, axs = plt.subplots(5, figsize=(5,25))
+    axs[0].plot(results_dict['train_hinge_objective_vector'])
+    axs[0].set_title('train_hinge_objective_vector')
+    axs[1].plot(results_dict['train_hinge_constraints_matrix'])
+    axs[1].set_title('train_hinge_constraints_matrix')
+    axs[2].plot(results_dict['train_01_proxy_Ghat_constraints_matrix'])
+    axs[2].set_title('train_01_proxy_Ghat_constraints_matrix')
+    axs[3].plot(results_dict['train_01_true_G_constraints_matrix'])
+    axs[3].set_title('train_01_true_G_constraints_matrix')
+    axs[4].plot(results_dict['train_01_robust_constraints_matrix'])
+    axs[4].set_title('train_01_robust_constraints_matrix')
+    # plt.show()
+    plt.savefig('optimization_softweights.png')
 
 def get_results_for_learning_rates(input_df, 
                                     feature_names, protected_columns, proxy_columns, label_column, 
@@ -1163,7 +1202,13 @@ def get_results_for_learning_rates(input_df,
     print("############### Final Results ###############")
     print(final_average_results_dict)
     train_df.to_csv("data/Trained_predictions.csv")
-    return final_average_results_dict
+    plot_optimization_softweights(results_dict)
+    print("RESULTS_DICT")
+    print(results_dict)
+    print("PROTECTED_COLUMS", protected_columns)
+    print("PROXY_COLUMNS", proxy_columns)
+    plot_optimization_avg(final_average_results_dict, protected_columns, proxy_columns)
+    return final_average_results_dict, results_dict
 
 
 def add_results_dict_best_idx(results_dict, best_index):
@@ -1284,22 +1329,6 @@ def print_results_avg_iter(results_dict, num_avg_iters=10):
     print("%.4f, %.4f ,%.4f" % (np.max(np.mean(np.array(results_dict['train_01_robust_constraints_matrix'][-num_avg_iters:]), axis=0)), 
                                 np.max(np.mean(np.array(results_dict['val_01_robust_constraints_matrix'][-num_avg_iters:]), axis=0)),
                                 np.max(np.mean(np.array(results_dict['test_01_robust_constraints_matrix'][-num_avg_iters:]), axis=0))))
-
-
-# Expects results dicts without averaging.
-def plot_optimization_softweights(results_dict):
-    fig, axs = plt.subplots(5, figsize=(5,25))
-    axs[0].plot(results_dict['train_hinge_objective_vector'])
-    axs[0].set_title('train_hinge_objective_vector')
-    axs[1].plot(results_dict['train_hinge_constraints_matrix'])
-    axs[1].set_title('train_hinge_constraints_matrix')
-    axs[2].plot(results_dict['train_01_proxy_Ghat_constraints_matrix'])
-    axs[2].set_title('train_01_proxy_Ghat_constraints_matrix')
-    axs[3].plot(results_dict['train_01_true_G_constraints_matrix'])
-    axs[3].set_title('train_01_true_G_constraints_matrix')
-    axs[4].plot(results_dict['train_01_robust_constraints_matrix'])
-    axs[4].set_title('train_01_robust_constraints_matrix')
-    plt.show()
 
 
 # Expects averaged results_dict with means and standard deviations.
@@ -1482,26 +1511,3 @@ def print_avg_results_best_iter_tpr_and_fpr(results_dict, num_groups=3):
                                                          val_max_mean_fpr, val_max_std_fpr,
                                                          test_max_mean_fpr, test_max_std_fpr))
        
-
-
-# Expects averaged results_dict with means and standard deviations.
-def plot_optimization_avg(results_dict, protected_columns, proxy_columns):
-    fig, axs = plt.subplots(5, figsize=(5,25))
-    num_iters = len(results_dict['train_hinge_objective_vector'][0])
-    iters = np.arange(num_iters)
-    axs[0].errorbar(iters, results_dict['train_hinge_objective_vector'][0], yerr=results_dict['train_hinge_objective_vector'][1])
-    axs[0].set_title('train_hinge_objective_vector')
-    for i in range(len(protected_columns)):
-        axs[1].errorbar(iters, results_dict['train_hinge_constraints_matrix'][0].T[i], results_dict['train_hinge_constraints_matrix'][1].T[i], label=protected_columns[i])
-        axs[2].errorbar(iters, results_dict['train_01_proxy_Ghat_constraints_matrix'][0].T[i], results_dict['train_01_proxy_Ghat_constraints_matrix'][1].T[i], label=proxy_columns[i])
-        axs[3].errorbar(iters, results_dict['train_01_true_G_constraints_matrix'][0].T[i], results_dict['train_01_true_G_constraints_matrix'][1].T[i], label=protected_columns[i])
-        axs[4].errorbar(iters, results_dict['train_01_robust_constraints_matrix'][0].T[i], results_dict['train_01_robust_constraints_matrix'][1].T[i], label=protected_columns[i])
-    axs[1].set_title('train_hinge_constraints_matrix')
-    axs[1].legend()
-    axs[2].set_title('train_01_proxy_Ghat_constraints_matrix')
-    axs[2].legend()
-    axs[3].set_title('train_01_true_G_constraints_matrix')
-    axs[3].legend()
-    axs[4].set_title('train_01_robust_constraints_matrix')
-    axs[4].legend()
-    plt.show()
