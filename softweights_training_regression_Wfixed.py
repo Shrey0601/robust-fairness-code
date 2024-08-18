@@ -430,28 +430,6 @@ class SoftweightsHeuristicModel(model.Model):
             constraints_list = self.get_equal_bgl_constraints(constraints_slack=constraints_slack)
         self.num_constraints = len(constraints_list)
         self.constraints = tf.convert_to_tensor(constraints_list)
-        
-        # constraints_list = []
-        # # Compute the overall average loss (e.g., MSE) for all samples
-        # overall_mse = tf.reduce_mean(tf.square(self.labels_placeholder - self.predictions_tensor))
-        
-        # # Compute the loss for each group
-        # for j in range(self.num_groups):
-        #     # Get group indices
-        #     group_indices = tf.where(tf.equal(group_labels, j))
-            
-        #     # Gather labels and predictions for the group
-        #     group_labels = tf.gather(self.labels_placeholder, group_indices)
-        #     group_predictions = tf.gather(self.predictions_tensor, group_indices)
-            
-        #     # Compute the mean squared error for the group
-        #     group_mse = tf.reduce_mean(tf.square(group_labels - group_predictions))
-            
-        #     # Create a constraint that the difference between the group's MSE and the overall MSE is within the slack
-        #     constraint = tf.abs(group_mse - overall_mse) - constraints_slack
-            
-        #     # Append the constraint to the list
-        #     constraints_list.append(constraint)
 
         # Create lagrange multiplier variables.  ##### Here the lambda variables are created [0,0,....0]
         initial_lambdas = np.zeros((self.num_constraints,), dtype=np.float32)
@@ -1045,7 +1023,7 @@ def get_true_group_marginals(input_df, true_groups):
     return true_group_marginals   ##### calculates the marginal probability (mean) for each true group
 
 # Expects averaged results_dict with means and standard deviations.
-def plot_optimization_avg(results_dict, protected_columns, proxy_columns):
+def plot_optimization_avg(results_dict, protected_columns, proxy_columns, max_diff):
     fig, axs = plt.subplots(5, figsize=(5,25))
     hinge_objective_vector = np.array(results_dict['train_hinge_objective_vector'][0])
     num_iters = len(hinge_objective_vector)
@@ -1066,10 +1044,10 @@ def plot_optimization_avg(results_dict, protected_columns, proxy_columns):
     axs[4].set_title('train_01_robust_constraints_matrix')
     axs[4].legend()
     # plt.show()
-    plt.savefig('optimization_avg.png')
+    plt.savefig('results/optimization_avg_' + str(max_diff) + '.png')
 
 # Expects results dicts without averaging.
-def plot_optimization_softweights(results_dict):
+def plot_optimization_softweights(results_dict, max_diff):
     fig, axs = plt.subplots(5, figsize=(5,25))
     axs[0].plot(results_dict['train_hinge_objective_vector'])
     axs[0].set_title('train_hinge_objective_vector')
@@ -1082,7 +1060,7 @@ def plot_optimization_softweights(results_dict):
     axs[4].plot(results_dict['train_01_robust_constraints_matrix'])
     axs[4].set_title('train_01_robust_constraints_matrix')
     # plt.show()
-    plt.savefig('optimization_softweights.png')
+    plt.savefig('results/optimization_softweights_' + str(max_diff) + '.png')
 
 def get_results_for_learning_rates(input_df, 
                                     feature_names, protected_columns, proxy_columns, label_column, 
@@ -1100,12 +1078,11 @@ def get_results_for_learning_rates(input_df,
                                     rank_objectives=False, # parameters for find_best_candidate_index
                                     max_constraints=False, # parameters for find_best_candidate_index
                                     num_iterations_W=5,
-                                    max_diff=0.05,
+                                    # max_diff=0.05,
                                     best_index_nburn=0, # Number of initial candidate indices to exclude from find_best_candidate_index.
                                     seed_start=100,
                                     ):    
     ts = time.time()
-    # 10 runs with mean and stddev
     grp_labels = []
     m = {'race1_asian': 0, 'race1_black': 1, 'race1_hisp': 2, 'race1_other': 3, 'race1_white': 4}
     for i in range(len(input_df)):
@@ -1116,99 +1093,102 @@ def get_results_for_learning_rates(input_df,
                     break
             except:
                 grp_labels.append(0)
+    # 10 runs with mean and stddev
     results_dicts_runs = []
-    for i in range(num_runs):
-        print("CONSTRAINT", constraint)
-        print('Split %d of %d' % (i, num_runs))
-        t_split = time.time()
+    for max_diff in np.arange(0.1, 1.05, 0.05):
+        print("MAXDIFF = ", max_diff)
+        for i in range(num_runs):
+            print("CONSTRAINT", constraint)
+            print('Split %d of %d' % (i, num_runs))
+            t_split = time.time()
 
-        train_df, val_df, test_df = data.train_val_test_split(input_df, 0.6, 0.2, seed=seed_start+i)
-        # Refresh the b parameter and true_group_marginals parameter for every split.
-        b = build_b(train_df, proxy_columns, protected_columns)
-        true_group_marginals = get_true_group_marginals(train_df, protected_columns)
+            train_df, val_df, test_df = data.train_val_test_split(input_df, 0.6, 0.2, seed=seed_start+i)
+            # Refresh the b parameter and true_group_marginals parameter for every split.
+            b = build_b(train_df, proxy_columns, protected_columns)
+            true_group_marginals = get_true_group_marginals(train_df, protected_columns)
 
-        val_objectives = []
-        val_constraints_matrix = []
-        results_dicts = []
-        learning_rates_iters_theta = []
-        learning_rates_iters_lambda = []
-        learning_rates_iters_W = []
+            val_objectives = []
+            val_constraints_matrix = []
+            results_dicts = []
+            learning_rates_iters_theta = []
+            learning_rates_iters_lambda = []
+            learning_rates_iters_W = []
 
-        for learning_rate_theta in learning_rates_theta:
-            for learning_rate_lambda in learning_rates_lambda:
-                for learning_rate_W in learning_rates_W:   ###### They are learning W's
-                    t_start_iter = time.time() - ts
-                    print("Time since start:", t_start_iter)
-                    print("Starting optimizing learning rate theta: %.3f, learning rate lambda: %.3f, learning rate W: %.3f" % (learning_rate_theta, learning_rate_lambda, learning_rate_W))
-                    sw_model = SoftweightsHeuristicModel(b, true_group_marginals, feature_names, proxy_columns, label_column, maximum_lambda_radius=1.0)
-                    sw_model.build_train_ops(b, constraint=constraint, learning_rate_theta=learning_rate_theta, learning_rate_lambda=learning_rate_lambda, learning_rate_W=learning_rate_W, constraints_slack=constraints_slack, group_labels = grp_labels)
+            for learning_rate_theta in learning_rates_theta:
+                for learning_rate_lambda in learning_rates_lambda:
+                    for learning_rate_W in learning_rates_W:   ###### They are learning W's
+                        t_start_iter = time.time() - ts
+                        print("Time since start:", t_start_iter)
+                        print("Starting optimizing learning rate theta: %.3f, learning rate lambda: %.3f, learning rate W: %.3f" % (learning_rate_theta, learning_rate_lambda, learning_rate_W))
+                        sw_model = SoftweightsHeuristicModel(b, true_group_marginals, feature_names, proxy_columns, label_column, maximum_lambda_radius=1.0)
+                        sw_model.build_train_ops(b, constraint=constraint, learning_rate_theta=learning_rate_theta, learning_rate_lambda=learning_rate_lambda, learning_rate_W=learning_rate_W, constraints_slack=constraints_slack, group_labels = grp_labels)
 
-                    # training_helper returns the list of errors and violations over each epoch.
-                    results_dict = training_helper(
-                          sw_model,
-                          train_df,
-                          val_df,
-                          test_df,
-                          protected_columns, 
-                          proxy_columns,  
-                          label_column,
-                          minibatch_size=minibatch_size,
-                          num_iterations_per_loop=num_iterations_per_loop,
-                          num_loops=num_loops,
-                          optimize_robust_constraints=optimize_robust_constraints,
-                          num_iterations_W=num_iterations_W,
-                          max_diff=max_diff,
-                          constraint=constraint)
+                        # training_helper returns the list of errors and violations over each epoch.
+                        results_dict = training_helper(
+                            sw_model,
+                            train_df,
+                            val_df,
+                            test_df,
+                            protected_columns, 
+                            proxy_columns,  
+                            label_column,
+                            minibatch_size=minibatch_size,
+                            num_iterations_per_loop=num_iterations_per_loop,
+                            num_loops=num_loops,
+                            optimize_robust_constraints=optimize_robust_constraints,
+                            num_iterations_W=num_iterations_W,
+                            max_diff=max_diff,
+                            constraint=constraint)
+                        
+                        # Get best iterate using training set.
+                        best_index_iters = utils.find_best_candidate_index(np.array(results_dict['train_01_objective_vector'][best_index_nburn:]),np.array(results_dict['train_01_robust_constraints_matrix'][best_index_nburn:]), rank_objectives=rank_objectives, max_constraints=max_constraints)
+                        best_index_iters = best_index_iters + best_index_nburn
+                        results_dict_best_idx = add_results_dict_best_idx(results_dict, best_index_iters)
+                        results_dicts.append(results_dict_best_idx)
+                        if num_avg_iters == 0:
+                            best_val_objective = results_dict['val_01_objective_vector'][best_index_iters]
+                            best_val_constraints = results_dict['val_01_true_G_constraints_matrix'][best_index_iters]
+                            val_objectives.append(best_val_objective)
+                            val_constraints_matrix.append(best_val_constraints)
+                            print ("best val objective: %0.4f" % best_val_objective)
+                            print ("best val constraints:", best_val_constraints)
+                        else: 
+                            assert(num_avg_iters > 0)
+                            avg_val_objective = np.mean(np.array(results_dict['val_01_objective_vector'][-num_avg_iters:]))
+                            val_objectives.append(avg_val_objective)
+                            avg_val_constraints = np.mean(np.array(results_dict['val_01_robust_constraints_matrix'][-num_avg_iters:]), axis=0)
+                            val_constraints_matrix.append(avg_val_constraints)
+                            print ("avg val objective: %0.4f" % avg_val_objective)
+                            print ("avg val constraints:", avg_val_constraints)
+                        learning_rates_iters_theta.append(learning_rate_theta)
+                        learning_rates_iters_lambda.append(learning_rate_lambda)
+                        learning_rates_iters_W.append(learning_rate_W)
+                        print("Finished optimizing learning rate theta: %.3f, learning rate lambda: %.3f, learning rate W: %.3f" % (learning_rate_theta, learning_rate_lambda, learning_rate_W))
+                        print("Time that this run took:", time.time() - t_start_iter - ts)
                     
-                    # Get best iterate using training set.
-                    best_index_iters = utils.find_best_candidate_index(np.array(results_dict['train_01_objective_vector'][best_index_nburn:]),np.array(results_dict['train_01_robust_constraints_matrix'][best_index_nburn:]), rank_objectives=rank_objectives, max_constraints=max_constraints)
-                    best_index_iters = best_index_iters + best_index_nburn
-                    results_dict_best_idx = add_results_dict_best_idx(results_dict, best_index_iters)
-                    results_dicts.append(results_dict_best_idx)
-                    if num_avg_iters == 0:
-                        best_val_objective = results_dict['val_01_objective_vector'][best_index_iters]
-                        best_val_constraints = results_dict['val_01_true_G_constraints_matrix'][best_index_iters]
-                        val_objectives.append(best_val_objective)
-                        val_constraints_matrix.append(best_val_constraints)
-                        print ("best val objective: %0.4f" % best_val_objective)
-                        print ("best val constraints:", best_val_constraints)
-                    else: 
-                        assert(num_avg_iters > 0)
-                        avg_val_objective = np.mean(np.array(results_dict['val_01_objective_vector'][-num_avg_iters:]))
-                        val_objectives.append(avg_val_objective)
-                        avg_val_constraints = np.mean(np.array(results_dict['val_01_robust_constraints_matrix'][-num_avg_iters:]), axis=0)
-                        val_constraints_matrix.append(avg_val_constraints)
-                        print ("avg val objective: %0.4f" % avg_val_objective)
-                        print ("avg val constraints:", avg_val_constraints)
-                    learning_rates_iters_theta.append(learning_rate_theta)
-                    learning_rates_iters_lambda.append(learning_rate_lambda)
-                    learning_rates_iters_W.append(learning_rate_W)
-                    print("Finished optimizing learning rate theta: %.3f, learning rate lambda: %.3f, learning rate W: %.3f" % (learning_rate_theta, learning_rate_lambda, learning_rate_W))
-                    print("Time that this run took:", time.time() - t_start_iter - ts)
-                
-        # Get best hyperparameters using validation set.
-        best_index = utils.find_best_candidate_index(np.array(val_objectives),np.array(val_constraints_matrix), rank_objectives=rank_objectives, max_constraints=max_constraints)
-        best_results_dict = results_dicts[best_index]
-        best_learning_rate_theta = learning_rates_iters_theta[best_index]
-        best_learning_rate_lambda = learning_rates_iters_lambda[best_index]
-        best_learning_rate_W = learning_rates_iters_W[best_index]
-        print('best_learning_rate_theta,', best_learning_rate_theta)
-        print('best_learning_rate_lambda', best_learning_rate_lambda)
-        print('best_learning_rate_W', best_learning_rate_W)
-        results_dicts_runs.append(best_results_dict)
-        print("time it took for this split", time.time() - t_split)
-        print('best true G constraint violations', best_results_dict['best_train_01_true_G_constraints_matrix'])
-    final_average_results_dict = utils.average_results_dict_fn(results_dicts_runs)
-    print("############### Final Results ###############")
-    print(final_average_results_dict)
-    train_df.to_csv("data/Trained_predictions.csv")
-    plot_optimization_softweights(results_dict)
-    print("RESULTS_DICT")
-    print(results_dict)
-    print("PROTECTED_COLUMS", protected_columns)
-    print("PROXY_COLUMNS", proxy_columns)
-    plot_optimization_avg(final_average_results_dict, protected_columns, proxy_columns)
-    return final_average_results_dict, results_dict
+            # Get best hyperparameters using validation set.
+            best_index = utils.find_best_candidate_index(np.array(val_objectives),np.array(val_constraints_matrix), rank_objectives=rank_objectives, max_constraints=max_constraints)
+            best_results_dict = results_dicts[best_index]
+            best_learning_rate_theta = learning_rates_iters_theta[best_index]
+            best_learning_rate_lambda = learning_rates_iters_lambda[best_index]
+            best_learning_rate_W = learning_rates_iters_W[best_index]
+            print('best_learning_rate_theta,', best_learning_rate_theta)
+            print('best_learning_rate_lambda', best_learning_rate_lambda)
+            print('best_learning_rate_W', best_learning_rate_W)
+            results_dicts_runs.append(best_results_dict)
+            print("time it took for this split", time.time() - t_split)
+            print('best true G constraint violations', best_results_dict['best_train_01_true_G_constraints_matrix'])
+        final_average_results_dict = utils.average_results_dict_fn(results_dicts_runs)
+        print("############### Final Results ###############")
+        print(final_average_results_dict)
+        # train_df.to_csv("data/Trained_predictions.csv")
+        plot_optimization_softweights(results_dict, max_diff)
+        print("RESULTS_DICT")
+        print(results_dict)
+        print("PROTECTED_COLUMS", protected_columns)
+        print("PROXY_COLUMNS", proxy_columns)
+        plot_optimization_avg(final_average_results_dict, protected_columns, proxy_columns, max_diff)
+        # return final_average_results_dict, results_dict
 
 
 def add_results_dict_best_idx(results_dict, best_index):
