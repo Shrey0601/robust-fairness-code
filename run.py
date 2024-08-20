@@ -46,4 +46,4 @@ PROTECTED_COLUMNS = ['race1_asian', 'race1_black', 'race1_hisp', 'race1_other', 
 noise_parameter = 0.1
 PROXY_COLUMNS = data.get_proxy_column_names(PROTECTED_COLUMNS, noise_parameter)
 
-_, results = softweights_training_regression_Wfixed.get_results_for_learning_rates(df, FEATURE_NAMES, PROTECTED_COLUMNS, PROXY_COLUMNS, LABEL_COLUMN, constraint='bgl')
+softweights_training_regression_Wfixed.get_results_for_learning_rates(df, FEATURE_NAMES, PROTECTED_COLUMNS, PROXY_COLUMNS, LABEL_COLUMN, constraint='bgl')

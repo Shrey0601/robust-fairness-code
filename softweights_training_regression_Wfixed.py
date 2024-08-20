@@ -1062,6 +1062,63 @@ def plot_optimization_softweights(results_dict, max_diff):
     # plt.show()
     plt.savefig('results/optimization_softweights_' + str(max_diff) + '.png')
 
+def plot_metrics_across_max_diff(max_diff_values, 
+                                 train_mse_values, 
+                                 val_mse_values, 
+                                 test_mse_values, 
+                                 best_train_robust_constraints_values, 
+                                 best_val_robust_constraints_values,
+                                 best_test_robust_constraints_values,
+                                 train_r2_values,
+                                 val_r2_values,
+                                 test_r2_values,
+                                 train_mae_values,
+                                 val_mae_values,
+                                 test_mae_values):
+    
+    fig, axs = plt.subplots(4, figsize=(10, 30))
+    fig.suptitle('Metrics Across Different Values of Max Diff', fontsize=20)
+    
+    # Plot MSE values
+    axs[0].plot(max_diff_values, train_mse_values, label='Train MSE')
+    axs[0].plot(max_diff_values, val_mse_values, label='Validation MSE')
+    axs[0].plot(max_diff_values, test_mse_values, label='Test MSE')
+    axs[0].set_title('MSE Across Max Diff')
+    axs[0].set_xlabel('Max Diff')
+    axs[0].set_ylabel('MSE')
+    axs[0].legend()
+
+    # Plot robust constraints (minimum of best_train_01_robust_constraints_matrix)
+    axs[1].plot(max_diff_values, best_train_robust_constraints_values, label='Train Robust Constraints (min)')
+    axs[1].plot(max_diff_values, best_val_robust_constraints_values, label='Validation Robust Constraints (min)')
+    axs[1].plot(max_diff_values, best_test_robust_constraints_values, label='Test Robust Constraints (min)')
+    axs[1].set_title('Robust Constraints Across Max Diff')
+    axs[1].set_xlabel('Max Diff')
+    axs[1].set_ylabel('Robust Constraints (min)')
+    axs[1].legend()
+
+    # Plot R2 scores
+    axs[2].plot(max_diff_values, train_r2_values, label='Train R2')
+    axs[2].plot(max_diff_values, val_r2_values, label='Validation R2')
+    axs[2].plot(max_diff_values, test_r2_values, label='Test R2')
+    axs[2].set_title('R2 Scores Across Max Diff')
+    axs[2].set_xlabel('Max Diff')
+    axs[2].set_ylabel('R2 Score')
+    axs[2].legend()
+
+    axs[3].plot(max_diff_values, train_mae_values, label='Train MAE')
+    axs[3].plot(max_diff_values, val_mae_values, label='Validation MAE')
+    axs[3].plot(max_diff_values, test_mae_values, label='Test MAE')
+    axs[3].set_title('MAE Scores Across Max Diff')
+    axs[3].set_xlabel('Max Diff')
+    axs[3].set_ylabel('MAE Score')
+    axs[3].legend()
+    
+    # Show or save the plot
+    plt.savefig('results/metrics_across_max_diff.png')
+    # plt.show()
+
+
 def get_results_for_learning_rates(input_df, 
                                     feature_names, protected_columns, proxy_columns, label_column, 
                                     constraint = 'bgl', 
@@ -1095,8 +1152,24 @@ def get_results_for_learning_rates(input_df,
                 grp_labels.append(0)
     # 10 runs with mean and stddev
     results_dicts_runs = []
+    
+    max_diff_values = []
+    train_mse_values = []
+    val_mse_values = []
+    test_mse_values = []
+    best_train_robust_constraints_values = []
+    best_val_robust_constraints_values = []
+    best_test_robust_constraints_values = []
+    train_r2_values = []
+    val_r2_values = []
+    test_r2_values = []
+    train_mae_values = []
+    val_mae_values = []
+    test_mae_values = []
+    
     for max_diff in np.arange(0.1, 1.05, 0.05):
         print("MAXDIFF = ", max_diff)
+        max_diff_values.append(max_diff)
         for i in range(num_runs):
             print("CONSTRAINT", constraint)
             print('Split %d of %d' % (i, num_runs))
@@ -1144,6 +1217,7 @@ def get_results_for_learning_rates(input_df,
                         best_index_iters = utils.find_best_candidate_index(np.array(results_dict['train_01_objective_vector'][best_index_nburn:]),np.array(results_dict['train_01_robust_constraints_matrix'][best_index_nburn:]), rank_objectives=rank_objectives, max_constraints=max_constraints)
                         best_index_iters = best_index_iters + best_index_nburn
                         results_dict_best_idx = add_results_dict_best_idx(results_dict, best_index_iters)
+                        
                         results_dicts.append(results_dict_best_idx)
                         if num_avg_iters == 0:
                             best_val_objective = results_dict['val_01_objective_vector'][best_index_iters]
@@ -1165,7 +1239,9 @@ def get_results_for_learning_rates(input_df,
                         learning_rates_iters_W.append(learning_rate_W)
                         print("Finished optimizing learning rate theta: %.3f, learning rate lambda: %.3f, learning rate W: %.3f" % (learning_rate_theta, learning_rate_lambda, learning_rate_W))
                         print("Time that this run took:", time.time() - t_start_iter - ts)
-                    
+            
+            
+            
             # Get best hyperparameters using validation set.
             best_index = utils.find_best_candidate_index(np.array(val_objectives),np.array(val_constraints_matrix), rank_objectives=rank_objectives, max_constraints=max_constraints)
             best_results_dict = results_dicts[best_index]
@@ -1185,6 +1261,47 @@ def get_results_for_learning_rates(input_df,
         plot_optimization_softweights(results_dict, max_diff)
         print("RESULTS_DICT")
         print(results_dict)
+        
+        train_mse_values.append(np.min(results_dict['best_train_mse_vector']))
+        val_mse_values.append(np.min(results_dict['val_mse_vector']))
+        test_mse_values.append(np.min(results_dict['test_mse_vector']))
+        best_train_robust_constraints_values.append(np.min(results_dict['best_train_01_robust_constraints_matrix']))
+        best_val_robust_constraints_values.append(np.min(results_dict['val_01_robust_constraints_matrix']))
+        best_test_robust_constraints_values.append(np.min(results_dict['test_01_robust_constraints_matrix']))
+        train_r2_values.append(np.max(results_dict['train_r2_vector']))
+        val_r2_values.append(np.max(results_dict['val_r2_vector']))
+        test_r2_values.append(np.max(results_dict['test_r2_vector']))
+        train_mae_values.append(np.max(results_dict['train_mae_vector']))
+        val_mae_values.append(np.max(results_dict['val_mae_vector']))
+        test_mae_values.append(np.max(results_dict['test_mae_vector']))
+
+        print("TRAIN_MSE:", train_mse_values)
+        print("VAL_MSE:", val_mse_values)
+        print("TEST_MSE:", test_mse_values)
+        print("BEST_TRAIN_ROBUST_CONSTRAINTS:", best_train_robust_constraints_values)
+        print("BEST_VAL_ROBUST_CONSTRAINTS:", best_val_robust_constraints_values)
+        print("BEST_TEST_ROBUST_CONSTRAINTS:", best_test_robust_constraints_values)
+        print("TRAIN_R2:", train_r2_values)
+        print("VAL_R2:", val_r2_values)
+        print("TEST_R2:", test_r2_values)
+        print("TRAIN_MAE:", train_mae_values)
+        print("VAL_MAE:", val_mae_values)
+        print("TEST_MAE:", test_mae_values)
+        
+        plot_metrics_across_max_diff(max_diff_values, 
+                                 train_mse_values, 
+                                 val_mse_values, 
+                                 test_mse_values, 
+                                 best_train_robust_constraints_values, 
+                                 best_val_robust_constraints_values,
+                                 best_test_robust_constraints_values,
+                                 train_r2_values,
+                                 val_r2_values,
+                                 test_r2_values,
+                                 train_mae_values,
+                                 val_mae_values,
+                                 test_mae_values)
+        
         print("PROTECTED_COLUMS", protected_columns)
         print("PROXY_COLUMNS", proxy_columns)
         plot_optimization_avg(final_average_results_dict, protected_columns, proxy_columns, max_diff)
